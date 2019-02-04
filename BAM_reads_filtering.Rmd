@@ -21,212 +21,6 @@ GATK=/opt/GATK-3.7/GenomeAnalysisTK.jar #GATK software path
 BCF=/opt/bcftools-1.6/bcftools #BCFtools software path
 
 ```
-
-#1: Subset BAM files to gene reads.
-##Obtain bed file with gene coordinates +- 100 bp.
-
-```{r Subset BAM files to gene reads, eval=FALSE, engine='bash'}
-
-#Keep only genes annotation from Maria's file and then convert to bed file and to rf file.
-cd /GRUPOS/grupolince/Lyp_annotation_Apr14_final
-awk '$3 == "gene" {print $0;}' LYPA23C.GENE.mRNA.CDS.GENE_promoters.GENE_introns.UTRs.ncRNA.lncRNA.lncRNA_introns.lncRNA_promoters.UCNE.intergenic.nr.gff3 | cut -d$'\t' -f1,3,4,5 | awk '{printf ("%s\t%s\t%s\t%s\n", $1, $3, $4, $2)}' > LYPA23C.GENE.nr.bed
-awk '{printf ("%s:%s-%s\n", $1, $2, $3)}' LYPA23C.GENE.nr.bed > LYPA23C.GENE.nr.rf
-
-```
-
-##Subset the BAM files.
-###DON:
-```{r Subset BAM files to gene reads, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-screen -S c_lp_do_genes_BAMs.log
-script c_lp_do_genes_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_lp_do*.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  samtools view -b -h -L /GRUPOS/grupolince/Lyp_annotation_Apr14_final/LYPA23C.GENE.nr.bed c_lp_do_"${i}"_recal_round-1.bam > BAM_genes_5x/c_lp_do_"${i}"_recal_round-1.genes.bam
-  done
-
-```
-
-###SMO:
-```{r Subset BAM files to gene reads, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-screen -S c_lp_sm_genes_BAMs.log
-script c_lp_sm_genes_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_lp_sm*.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  samtools view -b -h -L /GRUPOS/grupolince/Lyp_annotation_Apr14_final/LYPA23C.GENE.nr.bed c_lp_sm_"${i}"_recal_round-1.bam > BAM_genes_5x/c_lp_sm_"${i}"_recal_round-1.genes.bam
-  done
-
-```
-
-#2: Obtain distribution of edit distance (DON only).
-##W-g BAMs.
-###Extract edit distance from BAMs.
-
-```{r Obtain distribution of edit distance, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr
-screen -S c_lp_do_edit_distance_distr.log
-script c_lp_do_edit_distance_distr.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_lp_do*.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  #samtools view c_lp_do_"${i}"_recal_round-1.bam | grep -o '\bNM:i:\w*' | awk -v var="${i}" -F ":" '{printf ("%s\t%s\n", $3, var)}' > edit_distance_distr/c_lp_do_"${i}"_NM_distr.txt
-  samtools view c_lp_do_"${i}"_recal_round-1.bam | grep -o '\bNM:i:\w*' | cut -d':' -f3 > edit_distance_distr/c_lp_do_"${i}"_NM_distr.txt
-  done
-  
-scp dkleinman@genomics-b.ebd.csic.es:/home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr/c_lp_do_*_NM_distr.txt /Users/Dani/ownCloud/backup/contamination/edit_distance_tests
-
-```
-
-###Draw edit distance distributions.
-
-```{r Other stuff}
-
-library(readr)
-library(dplyr)
-library(ggplot2)
-
-#First draw the NM distribution for each individual:
-sample_files <- list.files("/Users/Dani/ownCloud/backup/contamination/edit_distance_tests/", pattern="*distr.txt")
-for (file in sample_files) {
-  edit_distance_distribution <- read_tsv(paste0("/Users/Dani/ownCloud/backup/contamination/edit_distance_tests/",file),col_names=c("NM"))
-  edit_distance_distribution
-  sample <- strsplit(file,"_")[[1]][4]
-  print(sample)
-  plot_data <- edit_distance_distribution %>% group_by(NM) %>% tally()
-  plot_data
-  #edit_distance_distribution$pop <- as.factor(edit_distance_distribution$pop)
-  #plot_data <- edit_distance_distribution %>% filter(edit_distance_distribution$pop == !!pop) #the two !! allow R to evaluate the text and distinguish looping variables from col_names
-  #plot_data
-  NM_distr_ggplot <- ggplot(data=plot_data, aes(NM,n)) +
-  #geom_histogram(aes(NM),binwidth=1) +
-  geom_col() +
-  ggtitle(paste0("NM distribution for ",sample)) +
-  ylab("count") +
-  #xlab("heritability") +
-  scale_x_continuous(breaks=seq(0,nrow(plot_data),2)) +
-  theme_bw() +
-  theme(text=element_text(size=12,face="bold"),
-        rect=element_rect(size=1),
-        axis.line=element_line(colour="black"),
-        axis.title=element_text(size=16),
-        #axis.text.x=element_text(angle=45, hjust=1, size=24,colour="black"),
-        #axis.text.y=element_text(size=24,colour="black",margin=margin(t=0.5,unit="cm")),
-        #axis.title.y=element_text(size=30,margin=margin(r=0.5,unit="cm")),
-        panel.background=element_blank(),
-        panel.border=element_rect(colour="black"),
-        #panel.grid=element_blank(),
-        #panel.grid.major=element_line(colour="grey", linetype="dashed", size=0.4),
-        plot.margin=unit(c(0.5,1,0.5,0.5),"cm"),
-        #plot.title=element_text(size=36, face="bold", margin=margin(b=0.5, unit="cm")),
-        legend.background=element_rect(linetype="solid", colour="black", size=.5),
-        #legend.justification=c(0,0),
-        legend.key=element_rect(colour="white"),
-        #legend.key.size=unit(1.3,"cm"),
-        legend.position=c(0.92,0.86),
-        legend.title=element_blank()
-  )
-  NM_distr_ggplot
-  ggsave(paste0("c_lp_do_",sample,"_NM_distribution.lr_ann.pdf"), width=20, height=20, units="cm", device="pdf", path="/Users/Dani/ownCloud/backup/contamination/edit_distance_tests")
-}
-rm(edit_distance_distribution)
-
-```
-
-##Genes-only BAMs.
-###Extract edit distance from BAMs.
-
-```{r Obtain distribution of edit distance, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr
-screen -S c_lp_do_edit_distance_distr.genes.log
-script c_lp_do_edit_distance_distr.genes.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-declare SAMPLES=$(ls c_lp_do*_recal_round-1.genes.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  #samtools view c_lp_do_"${i}"_recal_round-1.genes.bam | grep -o '\bNM:i:\w*' | awk -v var="${i}" -F ":" '{printf ("%s\t%s\n", $3, var)}' > ./../edit_distance_distr/c_lp_do_"${i}"_NM_distr.genes.txt
-  samtools view c_lp_do_"${i}"_recal_round-1.genes.bam | grep -o '\bNM:i:\w*' | cut -d':' -f3 > ./../edit_distance_distr/c_lp_do_"${i}"_NM_distr.genes.txt
-  done
-  
-scp dkleinman@genomics-b.ebd.csic.es:/home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr/c_lp_do_*_NM_distr.genes.txt /Users/Dani/ownCloud/backup/contamination/edit_distance_tests
-
-```
-
-###Draw edit distance distributions.
-
-```{r Other stuff}
-
-library(readr)
-library(dplyr)
-library(ggplot2)
-
-#First draw the NM distribution for each individual:
-sample_files <- list.files("/Users/Dani/ownCloud/backup/contamination/edit_distance_tests/", pattern="*distr.genes.txt")
-for (file in sample_files) {
-  edit_distance_distribution <- read_tsv(paste0("/Users/Dani/ownCloud/backup/contamination/edit_distance_tests/",file),col_names=c("NM"))
-  edit_distance_distribution
-  sample <- strsplit(file,"_")[[1]][4]
-  print(sample)
-  plot_data <- edit_distance_distribution %>% group_by(NM) %>% tally()
-  plot_data
-  #edit_distance_distribution$pop <- as.factor(edit_distance_distribution$pop)
-  #plot_data <- edit_distance_distribution %>% filter(edit_distance_distribution$pop == !!pop) #the two !! allow R to evaluate the text and distinguish looping variables from col_names
-  #plot_data
-  NM_distr_ggplot <- ggplot(data=plot_data, aes(NM,n)) +
-  #geom_histogram(aes(NM),binwidth=1) +
-  geom_col() +
-  ggtitle(paste0("NM distribution for ",sample)) +
-  ylab("count") +
-  theme_bw() +
-  theme(text=element_text(size=12,face="bold"),
-        rect=element_rect(size=1),
-        axis.line=element_line(colour="black"),
-        axis.title=element_text(size=16),
-        #axis.text.x=element_text(angle=45, hjust=1, size=24,colour="black"),
-        #axis.text.y=element_text(size=24,colour="black",margin=margin(t=0.5,unit="cm")),
-        #axis.title.y=element_text(size=30,margin=margin(r=0.5,unit="cm")),
-        panel.background=element_blank(),
-        panel.border=element_rect(colour="black"),
-        #panel.grid=element_blank(),
-        #panel.grid.major=element_line(colour="grey", linetype="dashed", size=0.4),
-        plot.margin=unit(c(0.5,1,0.5,0.5),"cm"),
-        #plot.title=element_text(size=36, face="bold", margin=margin(b=0.5, unit="cm")),
-        legend.background=element_rect(linetype="solid", colour="black", size=.5),
-        #legend.justification=c(0,0),
-        legend.key=element_rect(colour="white"),
-        #legend.key.size=unit(1.3,"cm"),
-        legend.position=c(0.92,0.86),
-        legend.title=element_blank()
-  )
-  NM_distr_ggplot
-  ggsave(paste0("c_lp_do_",sample,"_NM_distribution.genes.pdf"), width=30, height=20, units="cm", device="pdf", path="/Users/Dani/ownCloud/backup/contamination/edit_distance_tests")
-}
-rm(edit_distance_distribution)
-
-reads_totales <- sum(plot_data$n)
-plot_bis <- mutate(plot_data,prop=as.numeric(100*n/reads_totales))
-plot_bis$cum_prop <- cumsum(plot_bis$prop)
-plot_bis
-
-```
-
 #3: Perform NM-based BAM filterings.
 
 ##Explore the contamination.
@@ -308,327 +102,12 @@ for i in ${SAMPLES[@]}
 
 ```
 
-####SMO:
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
 
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-screen -S c_lp_sm_genes_nm_BAMs.log
-script c_lp_sm_genes_nm_BAMs.log
 
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-declare SAMPLES=$(ls c_lp_sm_*_recal_round-1.genes.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  bamtools filter -tag "NM:<=4" -in c_lp_sm_"${i}"_recal_round-1.genes.bam -out c_lp_sm_"${i}"_recal_round-1.genes-nm.bam
-  samtools index c_lp_sm_"${i}"_recal_round-1.genes-nm.bam
-  done
-
-```
-
-###W-g BAMs.
-####DON:
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-screen -S c_lp_do_nm_BAMs.log
-script c_lp_do_nm_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_lp_do_*_recal_round-1.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  bamtools filter -tag "NM:<=4" -in c_lp_do_"${i}"_recal_round-1.bam -out c_lp_do_"${i}"_recal_round-1.nm.bam
-  samtools index c_lp_do_"${i}"_recal_round-1.nm.bam
-  done
-
-```
-
-####SMO:
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-screen -S c_lp_sm_nm_BAMs.log
-script c_lp_sm_nm_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_lp_sm_*_recal_round-1.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  bamtools filter -tag "NM:<=4" -in c_lp_sm_"${i}"_recal_round-1.bam -out c_lp_sm_"${i}"_recal_round-1.nm.bam
-  samtools index c_lp_sm_"${i}"_recal_round-1.nm.bam
-  done
-
-```
-
-####KIR:
-
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-screen -S c_ll_ki_nm_BAMs.log
-script c_ll_ki_nm_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_ll_ki_*_recal_round-1.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  bamtools filter -tag "NM:<=4" -in c_ll_ki_"${i}"_recal_round-1.bam -out c_ll_ki_"${i}"_recal_round-1.nm.bam
-  samtools index c_ll_ki_"${i}"_recal_round-1.nm.bam
-  done
-
-```
-
-####NOR:
-
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-screen -S c_ll_no_nm_BAMs.log
-script c_ll_no_nm_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_ll_no_*_recal_round-1.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  bamtools filter -tag "NM:<=4" -in c_ll_no_"${i}"_recal_round-1.bam -out c_ll_no_"${i}"_recal_round-1.nm.bam
-  samtools index c_ll_no_"${i}"_recal_round-1.nm.bam
-  done
-
-```
-
-####POL:
-
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-screen -S c_ll_po_nm_BAMs.log
-script c_ll_po_nm_BAMs.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final
-declare SAMPLES=$(ls c_ll_po_*_recal_round-1.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  bamtools filter -tag "NM:<=4" -in c_ll_po_"${i}"_recal_round-1.bam -out c_ll_po_"${i}"_recal_round-1.nm.bam
-  samtools index c_ll_po_"${i}"_recal_round-1.nm.bam
-  done
-
-```
-
-##Compare MQ distributions (DON only).
-###Obtain MQ distribution (NM files).
-
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr
-screen -S c_lp_do_MQ_distr.genes-nm.log
-script c_lp_do_MQ_distr.genes-nm.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-declare SAMPLES=$(ls c_lp_do_*_recal_round-1.genes-nm.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  samtools view c_lp_do_"${i}"_recal_round-1.genes-nm.bam | cut -f5 > ./../edit_distance_distr/c_lp_do_"${i}"_MQ_distr.genes-nm.txt
-  done
-  
-scp dkleinman@genomics-b.ebd.csic.es:/home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr/c_lp_do_*_MQ_distr.genes-nm.txt /Users/Dani/ownCloud/backup/contamination/MQ_tests
-
-```
-
-###Obtain MQ distribution (HM files).
-
-```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr
-screen -S c_lp_do_MQ_distr.genes-hm.log
-script c_lp_do_MQ_distr.genes-hm.log
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
-declare SAMPLES=$(ls c_lp_do_*_recal_round-1.genes-hm.bam | cut -c9-12 | sort | uniq)
-for i in ${SAMPLES[@]}
-  do
-  echo "${i}"
-  samtools view c_lp_do_"${i}"_recal_round-1.genes-hm.bam | cut -f5 > ./../edit_distance_distr/c_lp_do_"${i}"_MQ_distr.genes-hm.txt
-  done
-  
-scp dkleinman@genomics-b.ebd.csic.es:/home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/edit_distance_distr/c_lp_do_*_MQ_distr.genes-hm.txt /Users/Dani/ownCloud/backup/contamination/MQ_tests
-
-```
-
-###Draw MQ distributions.
-
-```{r Other stuff}
-
-library(readr)
-library(dplyr)
-library(ggplot2)
-
-#First draw the NM distribution for each individual:
-hm_files <- list.files("/Users/Dani/ownCloud/backup/contamination/MQ_tests/", pattern="*distr.genes-hm.txt")
-nm_files <- list.files("/Users/Dani/ownCloud/backup/contamination/MQ_tests/", pattern="*distr.genes-nm.txt")
-samples <- substr(hm_files,1,12)
-samples
-for (i in samples) {
-  nm_distribution <- read_tsv(paste0("/Users/Dani/ownCloud/backup/contamination/MQ_tests/",i,"_MQ_distr.genes-nm.txt"),col_names=c("MQ"))
-  head(nm_distribution)
-  nm_summary <- nm_distribution %>% group_by(MQ) %>% tally() %>% mutate(filter=as.factor("nm"),MQ60=as.factor("yes"))
-  hm_distribution <- read_tsv(paste0("/Users/Dani/ownCloud/backup/contamination/MQ_tests/",i,"_MQ_distr.genes-hm.txt"),col_names=c("MQ"))
-  head(hm_distribution)
-  hm_summary <- hm_distribution %>% group_by(MQ) %>% tally() %>% mutate(filter=as.factor("hm"),MQ60=as.factor("yes"))
-  MQ60_yes <- rbind(nm_summary,hm_summary)
-  MQ60_no <- MQ60_yes %>% filter(MQ!=60)
-  MQ60_no$MQ60 <- c("no")
-  plot_data <- rbind(MQ60_yes,MQ60_no)
-  plot_data
-  plot_data$filter = factor(plot_data$filter,levels(plot_data$filter)[c(1,2)])
-  plot_data$MQ60 = factor(plot_data$MQ60,levels(plot_data$MQ60)[c(1,2)])
-  MQ_distr_ggplot <- ggplot(data=plot_data, aes(MQ,n)) +
-  geom_col() +
-  facet_grid(interaction(filter,MQ60) ~ ., scales="free") +
-  ggtitle(paste0("MQ distribution for ",i)) +
-  ylab("count") +
-  theme_bw() +
-  theme(text=element_text(size=12,face="bold"),
-        rect=element_rect(size=1),
-        axis.line=element_line(colour="black"),
-        axis.title=element_text(size=16),
-        #axis.text.x=element_text(angle=45, hjust=1, size=24,colour="black"),
-        #axis.text.y=element_text(size=24,colour="black",margin=margin(t=0.5,unit="cm")),
-        #axis.title.y=element_text(size=30,margin=margin(r=0.5,unit="cm")),
-        panel.background=element_blank(),
-        panel.border=element_rect(colour="black"),
-        #panel.grid=element_blank(),
-        #panel.grid.major=element_line(colour="grey", linetype="dashed", size=0.4),
-        plot.margin=unit(c(0.5,1,0.5,0.5),"cm"),
-        #plot.title=element_text(size=36, face="bold", margin=margin(b=0.5, unit="cm")),
-        legend.background=element_rect(linetype="solid", colour="black", size=.5),
-        #legend.justification=c(0,0),
-        legend.key=element_rect(colour="white"),
-        #legend.key.size=unit(1.3,"cm"),
-        legend.position=c(0.92,0.86),
-        legend.title=element_blank()
-  )
-  MQ_distr_ggplot
-  ggsave(paste0("c_lp_do_",i,"_MQ_distribution.genes.pdf"), width=30, height=20, units="cm", device="pdf", path="/Users/Dani/ownCloud/backup/contamination/MQ_tests")
-}
-
-```
 
 #4: Perform variant calling. Combine all BAMs of interest into the separate per species VCF (these won't include substitutions between species but their variants will be more accurate) or into a combined VCF (to track substitutions).
-##A: Genes-subset only. 
-###For Lynx pardinus.
-
-```{r Perform variant calling, eval=FALSE, engine='bash'}
-
-#Perform direct variant calling (without gVCFs) on the NM≤4 filtered Lynx pardinus BAMs.
-cd $V_PATH
-screen -S c_lp_sm_c_lp_do_nm_genes.log
-script c_lp_sm_c_lp_do_nm_genes.log
-
-cd $B_PATH/BAM_genes_5x
-java -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -XX:+UseStringDeduplication -jar $GATK \
--T HaplotypeCaller \
--R $REF \
-$(for var in c_lp*recal_round-1.genes-nm.bam; do echo -I ${var}" ";done) \
--o $V_PATH/c_lp_sm_c_lp_do_nm_genes.vcf
-
-grep -v '#' $V_PATH/c_lp_sm_c_lp_do_nm_genes.vcf | wc -l #1341848
-
-
-#Rename the samples with wrong names.
-cd $V_PATH
-screen -S c_lp_sm_c_lp_do_nm_genes_renamed.log
-script c_lp_sm_c_lp_do_nm_genes_renamed.log
-
-bcftools query -l c_lp_sm_c_lp_do_nm_genes.vcf #check sample names
-#!/bin/bash
-#cat << "EOF" > lp_rename.txt #Unmark this line when running it (I marked it in R because it doesn't understand it and messes the colours of subsequent lines). It should include all incorrect names.
-h_lp_do_0007 c_lp_do_0007
-EOF
-cat lp_rename.txt
-bcftools reheader -s lp_rename.txt -o c_lp_sm_c_lp_do_nm_genes_renamed.vcf c_lp_sm_c_lp_do_nm_genes.vcf #copy the VCF and rename the wrong named samples in the new VCF
-rm lp_rename.txt
-mv c_lp_sm_c_lp_do_nm_genes_renamed.vcf c_lp_sm_c_lp_do_nm_genes.vcf
-
-grep -v '#' c_lp_sm_c_lp_do_nm_genes.vcf | wc -l #1341848
-
-```
 
 ##B: Whole-genome. 
-###For Lynx pardinus.
-
-```{r Perform variant calling, eval=FALSE, engine='bash'}
-
-#Perform direct variant calling (without gVCFs) on the NM≤4 filtered Lynx pardinus BAMs.
-cd $V_PATH
-screen -S c_lp_sm_c_lp_do_nm.log
-script c_lp_sm_c_lp_do_nm.log
-
-cd $B_PATH
-java -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -XX:+UseStringDeduplication -jar $GATK \
--T HaplotypeCaller \
--R $REF \
-$(for var in c_lp*recal_round-1.nm.bam; do echo -I ${var}" ";done) \
--o $V_PATH/c_lp_sm_c_lp_do_nm.vcf
-
-grep -v '#' $V_PATH/c_lp_sm_c_lp_do_nm.vcf | wc -l #1341848
-
-#Rename the samples with wrong names.
-cd $V_PATH
-bcftools query -l c_lp_sm_c_lp_do_nm.vcf #check sample names
-#!/bin/bash
-#cat << "EOF" > lp_rename.txt #Unmark this line when running it (I marked it in R because it doesn't understand it and messes the colours of subsequent lines). It should include all incorrect names.
-h_lp_do_0007 c_lp_do_0007
-EOF
-cat lp_rename.txt
-bcftools reheader -s lp_rename.txt -o c_lp_sm_c_lp_do_nm_renamed.vcf c_lp_sm_c_lp_do_nm.vcf #copy the VCF and rename the wrong named samples in the new VCF
-rm lp_rename.txt
-mv c_lp_sm_c_lp_do_nm_renamed.vcf c_lp_sm_c_lp_do_nm.vcf
-
-grep -v '#' c_lp_sm_c_lp_do_nm.vcf | wc -l #
-
-```
-
-###For Lynx lynx.
-
-```{r Perform variant calling, eval=FALSE, engine='bash'}
-
-#Perform direct variant calling (without gVCFs) on the NM≤4 filtered Lynx lynx BAMs.
-cd $V_PATH
-screen -S c_ll_ki_c_ll_no_c_ll_po_nm.log
-script c_ll_ki_c_ll_no_c_ll_po_nm.log
-
-cd $B_PATH
-java -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -XX:+UseStringDeduplication -jar $GATK \
--T HaplotypeCaller \
--R $REF \
-$(for var in c_{ll_ki*,ll_no*,ll_po*}recal_round-1.nm.bam; do echo -I ${var}" ";done) \
--o $V_PATH/c_ll_ki_c_ll_no_c_ll_po_nm.vcf
-
-grep -v '#' $V_PATH/c_ll_ki_c_ll_no_c_ll_po_nm.vcf | wc -l #
-
-#Rename the samples with wrong names.
-cd $V_PATH
-bcftools query -l c_ll_ki_c_ll_no_c_ll_po_nm.vcf #check sample names
-#!/bin/bash
-#cat << "EOF" > ll_rename.txt #Unmark this line when running it (I marked it in R because it doesn't understand it and messes the colours of subsequent lines). It should include all incorrect names.
-LL90_rgsm c_ll_ki_0090
-EOF
-cat ll_rename.txt
-bcftools reheader -s ll_rename.txt -o c_ll_ki_c_ll_no_c_ll_po_nm_renamed.vcf c_ll_ki_c_ll_no_c_ll_po_nm.vcf #copy the VCF and rename the wrong named samples in the new VCF
-rm ll_rename.txt
-mv c_ll_ki_c_ll_no_c_ll_po_nm_renamed.vcf c_ll_ki_c_ll_no_c_ll_po_nm.vcf
-
-grep -v '#' c_ll_ki_c_ll_no_c_ll_po_nm.vcf | wc -l #
-
-```
-
 ###For both together.
 
 ```{r Perform variant calling, eval=FALSE, engine='bash'}
@@ -666,7 +145,7 @@ grep -v '#' c_lp_sm_c_lp_do_c_ll_ki_c_ll_no_c_ll_po_nm.vcf | wc -l #
 
 #5: Polarize contemporary VCFs. Use VCFtools in order to polarize (ancestral vs. derived) the contemporary ll & lp VCFs. The ancestral state was inferred by Maria.
 
-##Prepare ancestral genome fasta.
+##Prepare ancestral genome fasta.(This is already done).
 
 ```{r Polarize contemporary VCF, eval=FALSE, engine='bash'}
 
@@ -681,7 +160,6 @@ bgzip -c /home/GRUPOS/grupolince/reference_genomes/lynx_rufus_genome/c_lr_zz_000
 ```
 
 ##Use vcftools to add Ancestral Allele annotation to the VCF.
-###For Lynx pardinus.
 
 ```{r Polarize contemporary VCF, eval=FALSE, engine='bash'}
 
@@ -702,7 +180,6 @@ grep -v '#' c_lp_sm_c_lp_do_nm_genes_aafilled.vcf | wc -l #1341848
 ```
 
 ##Use VcfFilterJdk to polarize the AA-filled VCF.
-###For Lynx pardinus.
 
 ```{r Polarize contemporary VCF, eval=FALSE, engine='bash'}
 
@@ -762,6 +239,7 @@ grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized.vcf | wc -l #1341848
 #6: Set up SnpEff. I'll be following this manual for all SnpEff configuration purposes: http://snpeff.sourceforge.net/SnpEff_manual.html
 ##Search for the Lynx pardinus database. 
 Search for the Lynx pardinus assembly database in the program's pre-built database. As of June the 6th, 2017, the Lynx pardinus genome isn't included in the snpEff database. A second option would be building our own Lynx pardinus database.
+##This was already done by Dani, as he will be running this chunk there is no need to re run it.
 
 ```{r Set up SnpEff, eval=FALSE, engine='bash'}
 
@@ -919,7 +397,7 @@ ctrl + D #terminate the screen
 
 #7: Annotate using SnpEff.
 ##Create custom annotation bed file
-
+Dani will run this chunk
 ```{r Annotate using SnpEff, eval=FALSE, engine='bash'}
 
 #Create bed file with custom annotations based on the gff3 that María compiled.
@@ -953,239 +431,11 @@ grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized.lr_ann.vcf | wc -l #1341848
 
 ```
 
-#8: Depth range calculus. Obtain depth range for each species in order to filter low/high depth positions as part of the next section's many filterings.
-##A
-###For Lynx pardinus.
-
-```{r Depth range calculus, eval=FALSE, engine='bash'}
-
-#I'll use Maria's code to calculate depth. Since these populations are big, we'll be using Elena's captured intergenic fraction of the genome:
-
-POPS=(c_lp_do-c_lp_sm)
-cd /home/dkleinman/datos/c_lp_depth_calculus/
-
-screen -S c_lp_depth_calculus.log
-script c_lp_depth_calculus.log
-POP=(c_lp_do-c_lp_sm_n031)
-REF="/GRUPOS/grupolince/reference_genomes/lynx_pardinus_genome/lp23.fa"
-THREADS=20                    # no. of computer cores used 20 = OK, >20 = ask people first!
-REGIONFILE="/home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_intergenic_capture/BAM_intergenic_capture_filtered/no_genes_Lypa_10000longest_center_final_slop20_dot.rf"
-BAMLIST=$(ls /home/dkleinman/datos/c_lp_depth_calculus/"$POP".intergenic.bamlist) #intergenic BAMs are actually here: /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_intergenic_5x/
-OUT_NAME="/home/dkleinman/datos/c_lp_depth_calculus/"$POP".intergenic.qc"
-NUMBER_IND=$(printf "%03d" `wc -l $BAMLIST | cut -f1 -d " "`)
-MAXDEPTH=$(expr $NUMBER_IND \* 1000)
-    
-#Sanity checks: 
-ls $BAMLIST
-echo $OUT_NAME
-echo $NUMBER_IND
-echo $MAXDEPTH
-    
-/opt/angsd/angsd/angsd \
--P $THREADS \
--b $BAMLIST \
--ref $REF \
--out $OUT_NAME \
--uniqueOnly 1 \
--remove_bads 1 \
--only_proper_pairs 1 \
--rf $REGIONFILE \
--baq 1 \
--C 50 \
--doQsDist 1 \
--doDepth 1 \
--doCounts 1 \
--maxDepth $MAXDEPTH
-
-```
-
-###For Lynx lynx.
-
-```{r Depth range calculus, eval=FALSE, engine='bash'}
-
-#I'll use Maria's code to calculate depth. Since these populations are big, we'll be using Elena's captured intergenic fraction of the genome:
-POPS=(c_ll_no-c_ll_po-c_ll_ki)
-
-cd /home/dkleinman/datos/c_lp_depth_calculus/
-rm /home/dkleinman/datos/c_lp_depth_calculus/c_ll_no-c_ll_po-c_ll_ki_n029.intergenic.bamlist
-
-#cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_intergenic_5x
-#find `pwd` -name "c_ll_ki*intergenic.bam" >> /home/dkleinman/datos/c_lp_depth_calculus/c_ll_no-c_ll_po-c_ll_ki_n029.intergenic.bamlist
-
-cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_intergenic_5x/
-#find `pwd` -name "c_ll_ki*intergenic.bam" 
-find `pwd` -name "c_ll_ki*intergenic.bam" -o -name "c_ll_po*intergenic.bam" -o -name "c_ll_no*intergenic.bam" >> /home/dkleinman/datos/c_lp_depth_calculus/c_ll_no-c_ll_po-c_ll_ki_n029.intergenic.bamlist
-
-cat /home/dkleinman/datos/c_lp_depth_calculus/c_ll_no-c_ll_po-c_ll_ki_n029.intergenic.bamlist
-
-POPS=(c_ll_no-c_ll_po-c_ll_ki)
-cd /home/dkleinman/datos/c_lp_depth_calculus/
-
-screen -S c_ll_depth_calculus.log
-script c_ll_depth_calculus.log
-POP=(c_ll_no-c_ll_po-c_ll_ki_n029)
-REF="/GRUPOS/grupolince/reference_genomes/lynx_pardinus_genome/lp23.fa"
-THREADS=20                    # no. of computer cores used 20 = OK, >20 = ask people first!
-REGIONFILE="/home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_intergenic_capture/BAM_intergenic_capture_filtered/no_genes_Lypa_10000longest_center_final_slop20_dot.rf"
-BAMLIST=$(ls /home/dkleinman/datos/c_lp_depth_calculus/"$POP".intergenic.bamlist) #intergenic BAMs are actually here: /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_intergenic_5x/
-OUT_NAME="/home/dkleinman/datos/c_lp_depth_calculus/"$POP".intergenic.qc"
-NUMBER_IND=$(printf "%03d" `wc -l $BAMLIST | cut -f1 -d " "`)
-MAXDEPTH=$(expr $NUMBER_IND \* 1000)
-    
-#Sanity checks: 
-ls $BAMLIST
-cat $BAMLIST
-echo $OUT_NAME
-echo $NUMBER_IND
-echo $MAXDEPTH
-
-/opt/angsd/angsd/angsd \
--P $THREADS \
--b $BAMLIST \
--ref $REF \
--out $OUT_NAME \
--uniqueOnly 1 \
--remove_bads 1 \
--only_proper_pairs 1 \
--rf $REGIONFILE \
--baq 1 \
--C 50 \
--doQsDist 1 \
--doDepth 1 \
--doCounts 1 \
--maxDepth $MAXDEPTH
-
-#Once the files are ready, download them to continue working in R:
-scp dkleinman@genomics-b.ebd.csic.es:/home/dkleinman/datos/c_lp_depth_calculus/*n029*.depth* /Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth
-
-```
-
-##B
-
-```{r Depth range calculus}
-
-#Now we use R to plot the depth distribution and to obtain a summary table:
-
-library(dplyr)
-library(plyr)
-library(ggplot2)
-library(gridExtra)
-library(knitr)
-    
-##Functions:
-get_mean <- function(dat) { with(dat, sum(as.numeric(freq)*value)/sum(as.numeric(freq))) }
-get_sd <- function(dat) { mu <- get_mean (dat) 
-with (dat, sqrt(sum(as.numeric(freq)*(value-mu)^2)/(sum(as.numeric(freq))-1))) } 
-    
-#*******************************************************************************************
-    
-my_files_depthGlobal = list.files(path = "/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth",pattern="*.depthGlobal$")[2]
-    
-for (i in 1:length(my_files_depthGlobal)) {
-  assign(my_files_depthGlobal[i], (scan(paste0("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/",my_files_depthGlobal[i],sep=""), sep = " ", dec = ".")) %>% .[!is.na(.)])
-  }
-mean_folds = 0.95
-depth_per_sample <- data.frame()
-    
-#Compute globaldepth for all populations found
-#*******************************************************************************************
-    
-for (i in 1:length(my_files_depthGlobal)) {
-  DF = read.table(paste0("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/",my_files_depthGlobal[i],sep=""),head=F, stringsAsFactors=F, check.names=FALSE)
-  freq_table_DF <- data.frame (value = 1:length (DF), freq = t(DF))
-  freq_table_truncated_DF <- filter(freq_table_DF, value < (nrow(freq_table_DF)))
-  #Mean depth:
-  my_mean_DF <-  get_mean (freq_table_DF)
-  my_mean_truncated_DF <- get_mean (freq_table_truncated_DF)
-  my_sd_DF <-  get_sd (freq_table_DF)
-  my_sd_truncated_DF <- get_sd (freq_table_truncated_DF)
-  #Max and min depth:
-  maxDepth_DF = my_mean_DF + (mean_folds * my_mean_DF)
-  minDepth_DF  = my_mean_DF - (mean_folds * my_mean_DF)
-  maxDepth_truncated_DF = my_mean_truncated_DF + (mean_folds * my_sd_truncated_DF)
-  minDepth_truncated_DF  = my_mean_truncated_DF - (mean_folds * my_sd_truncated_DF)
-  #Para una o más poblaciones:
-  population=unlist(strsplit(my_files_depthGlobal[i],"[.]"))[1]
-  depth_per_sample <- rbind(depth_per_sample, 
-                            data.frame(pop = population,
-                                       mean = my_mean_DF, sd = my_sd_DF, 
-                                       mean_truncated =  my_mean_truncated_DF, sd_truncated = my_sd_truncated_DF,
-                                       maxDepth = maxDepth_DF, minDepth = minDepth_DF,
-                                       maxDepth_truncated = maxDepth_truncated_DF, minDepth_truncated = minDepth_truncated_DF)) 
-  #Plotting:
-  ggplot(freq_table_truncated_DF, aes(x = value, y = freq)) + 
-    geom_bar(stat = "identity", color = "black") +
-    scale_x_continuous(breaks = 0:250*10, limits = c(0, maxDepth_truncated_DF*1.5)) +
-    scale_y_continuous(expand=c(0,0)) +
-    ggtitle (paste(my_files_depthGlobal[i],"_", mean_folds, "_",maxDepth_truncated_DF, "_",maxDepth_DF) ) +
-    geom_vline(xintercept=maxDepth_DF,linetype="dashed", size=0.5) + 
-    geom_vline(xintercept=minDepth_DF,linetype="dashed", size=0.5) + 
-    geom_vline(xintercept=maxDepth_truncated_DF, colour ="grey",linetype="dashed", size=0.5) + 
-    geom_vline(xintercept=minDepth_truncated_DF,colour ="grey",linetype="dashed", size=0.5) + 
-    theme_classic() + 
-    theme(text = element_text(size=10))
-  plot_name=paste0("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/",my_files_depthGlobal[i],"_",mean_folds,".pdf",sep="")
-  ggsave(filename = plot_name)
-}
-
-#When finished write the table
-
-#Use this for Lynx pardinus:
-write.table(x = depth_per_sample,file = paste("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_",mean_folds,".csv", sep= ""),quote=FALSE, col.names = FALSE, row.names = FALSE, sep= " ")
-
-#Use this for Lynx lynx:
-write.table(x = depth_per_sample,file = paste("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/mean_sd_depthGlobal_lynx_lynx_per_pop_mean_folds_",mean_folds,".csv", sep= ""),quote=FALSE, col.names = FALSE, row.names = FALSE, sep= " ")
-
-#Use this for Lynx pardinus 5x only:
-write.table(x = depth_per_sample,file = paste("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/mean_sd_depthGlobal_lynx_pardinus_5x_per_pop_mean_folds_",mean_folds,".csv", sep= ""),quote=FALSE, col.names = FALSE, row.names = FALSE, sep= " ")
-
-#Use this for Lynx pardinus GP only:
-write.table(x = depth_per_sample,file = paste("/Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/mean_sd_depthGlobal_lynx_pardinus_GP_per_pop_mean_folds_",mean_folds,".csv", sep= ""),quote=FALSE, col.names = FALSE, row.names = FALSE, sep= " ")
-
-
-    
-```
-
-##C
-###For Lynx pardinus.
-
-```{r Depth range calculus, eval=FALSE, engine='bash'}
-
-#First upload the summary table to the server:
-scp /Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_0.95.csv dkleinman@genomics-b.ebd.csic.es:/home/dkleinman/datos/c_lp_depth_calculus/
-
-#Separate in populations:
-cd /home/dkleinman/datos/c_lp_depth_calculus/
-POPS=$(cat /home/dkleinman/datos/c_lp_depth_calculus/mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_0.95.csv | awk '{print $1}')
-for POP in ${POPS[@]}
-  do
-  echo $POP
-  grep "${POP} " /home/dkleinman/datos/c_lp_depth_calculus/mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_0.95.csv > "$POP"_mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_0.95.csv
-  done
-
-```    
-
-###For Lynx lynx.
-
-```{r Depth range calculus, eval=FALSE, engine='bash'}
-
-#First upload the summary table to the server:
-scp /Users/Dani/ownCloud/backup/g-w_analysis/genetic_load/lp_depth/mean_sd_depthGlobal_lynx_lynx_per_pop_mean_folds_0.95.csv dkleinman@genomics-b.ebd.csic.es:/home/dkleinman/datos/c_lp_depth_calculus/
-
-#Separate in populations:
-cd /home/dkleinman/datos/c_lp_depth_calculus/
-POPS=$(cat /home/dkleinman/datos/c_lp_depth_calculus/mean_sd_depthGlobal_lynx_lynx_per_pop_mean_folds_0.95.csv | awk '{print $1}')
-for POP in ${POPS[@]}
-  do
-  echo $POP
-  grep "${POP} " /home/dkleinman/datos/c_lp_depth_calculus/mean_sd_depthGlobal_lynx_lynx_per_pop_mean_folds_0.95.csv > "$POP"_mean_sd_depthGlobal_lynx_lynx_per_pop_mean_folds_0.95.csv
-  done
-    
-```
 
 #8: Filter the annotated VCF. Subset the VCF files in order to keep only good quality biallelic SNP variants.
 ##For Lynx pardinus.
-
+Remember to use mu cnv_file to filter and keep only songle copy genes
+Evaluate tjhe possibility to pipe filters and get one VCF directy
 ```{r Filter the annotated VCF, eval=FALSE, engine='bash'}
 
 cd $V_PATH/annotation
@@ -1198,9 +448,10 @@ GATK=/opt/GATK-3.7/GenomeAnalysisTK.jar #GATK software path
 BCF=/opt/bcftools-1.6/bcftools #BCFtools software path
 
 
-#Remove repetitive regions and those with low mappability:
-bedtools subtract -a c_lp_sm_c_lp_do_nm_genes_polarized.lr_ann.vcf -b /home/GRUPOS/grupolince/reference_genomes/lynx_pardinus_genome/repeats_and_lowcomp_no_redundant_mappability.k75_lessthan90.bed -header > c_lp_sm_c_lp_do_nm_genes_polarized_filtered1.lr_ann.vcf
+#Remove repetitive regions and those with low mappability or non-single copy:
+bedtools subtract -a c_lp_sm_c_lp_do_nm_genes_polarized.lr_ann.vcf -b /home/GRUPOS/grupolince/reference_genomes/lynx_pardinus_genome/repeats_and_lowcomp_no_redundant_mappability.k75_lessthan90.bed -header | !!! ADD MY SINGLE COPY BED!!> c_lp_sm_c_lp_do_nm_genes_polarized_filtered1.lr_ann.vcf
 
+!!! ADD MY SINGLE COPY BED!!
 grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized_filtered1.lr_ann.vcf | wc -l #645623
 
 
@@ -1216,8 +467,8 @@ java -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -XX:+UseStringDeduplication -Xms16g -X
 grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized_filtered2.lr_ann.vcf | wc -l #497025
 
 
-#Remove polarized ANC fixed variants (AF=0) or those that weren't polarizable (AA different from either REF or ALT):
-$BCF view -e '(INFO/AA!=REF & INFO/AA!=ALT) | INFO/AF=0.00' c_lp_sm_c_lp_do_nm_genes_polarized_filtered2.lr_ann.vcf > c_lp_sm_c_lp_do_nm_genes_polarized_filtered3.lr_ann.vcf
+#Remove polarized ANC fixed variants (AF=0 or AF=1) or those that weren't polarizable (AA different from either REF or ALT):
+$BCF view -e '(INFO/AA!=REF & INFO/AA!=ALT) | INFO/AF=0.00 | INFO/AF=1.00' c_lp_sm_c_lp_do_nm_genes_polarized_filtered2.lr_ann.vcf > c_lp_sm_c_lp_do_nm_genes_polarized_filtered3.lr_ann.vcf
 
 grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized_filtered3.lr_ann.vcf | wc -l #475783
 
@@ -1231,12 +482,10 @@ java -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -XX:+UseStringDeduplication -Xms16g -X
 
 grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized_filtered4.lr_ann.vcf | wc -l #446094
 
-#First, for each species exclude those positions that have more than 20% missing genotypes, as well as those that have lower (higher) depth than the minimum (maximum) within 0.95 of the distribution, as calculated in the previous section:
-MIN_DP=$(cat /home/dkleinman/datos/c_lp_depth_calculus/c_lp_do-c_lp_sm_n031_mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_0.95.csv | awk '{print $9}') #Obtained in section 5
-MAX_DP=$(cat /home/dkleinman/datos/c_lp_depth_calculus/c_lp_do-c_lp_sm_n031_mean_sd_depthGlobal_lynx_pardinus_per_pop_mean_folds_0.95.csv | awk '{print $8}') #Obtained in section 5
-echo $MIN_DP
-echo $MAX_DP
-$BCF filter -e "DP < ${MIN_DP} || DP > ${MAX_DP} || F_MISSING > 0.2" -Ov -o c_lp_sm_c_lp_do_nm_genes_polarized_filtered5.lr_ann.vcf c_lp_sm_c_lp_do_nm_genes_polarized_filtered4.lr_ann.vcf
+#First, for each species exclude those positions that have more than 20% missing genotypes
+Aquí me merece la pena explorar qué % de missingness me puedo permitir filtrar (sobre todo con las históricas)
+
+$BCF filter -e " F_MISSING > 0.2" -Ov -o c_lp_sm_c_lp_do_nm_genes_polarized_filtered5.lr_ann.vcf c_lp_sm_c_lp_do_nm_genes_polarized_filtered4.lr_ann.vcf
 
 grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized_filtered5.lr_ann.vcf | wc -l #402692
 
@@ -1291,7 +540,7 @@ grep -v '#' c_lp_sm_perpop_nm_genes/c_lp_sm_perpop_nm_genes.lr_ann.vcf | wc -l #
 
 #10: Split the population VCFs into per individual VCFs. Generate a VCF for each individual.
 ##For Lynx pardinus and Lynx lynx.
-
+Evaluate wheter I need this chunk
 ```{r Split the population VCFs into per individual VCFs, eval=FALSE, engine='bash'}
 
 #Generate individual VCFs from the per species VCFs:
