@@ -21,8 +21,8 @@ GATK=/opt/GATK-3.7/GenomeAnalysisTK.jar #GATK software path
 BCF=/opt/bcftools-1.6/bcftools #BCFtools software path
 
 ```
-#3: Perform NM-based BAM filterings.
-
+#1: Perform NM-based BAM filterings.
+Dani and Godo had lots of problems with the WG calling so they explored many possible sources of increased diversity and decided that there were lots of sources of contanimation (including the sequencing services). To remove such reads we cannot rely on MQ and we will do it using NM instead
 ##Explore the contamination.
 ###Filter in reads with NM ≥ 12.
 
@@ -84,7 +84,6 @@ for i in ${SAMPLES[@]}
 
 ##Filter out reads with high NM. Based on the previously obtained distribution of NM, we decide to filter out reads with NM>4.
 ###Genes-only BAMs.
-####DON:
 ```{r Perform NM-based BAM filterings, eval=FALSE, engine='bash'}
 
 cd /home/GRUPOS/grupolince/lynx_genomes_5x/BAM_files_final/BAM_genes_5x
@@ -99,7 +98,6 @@ for i in ${SAMPLES[@]}
   bamtools filter -tag "NM:<=4" -in c_lp_do_"${i}"_recal_round-1.genes.bam -out c_lp_do_"${i}"_recal_round-1.genes-nm.bam
   samtools index c_lp_do_"${i}"_recal_round-1.genes-nm.bam
   done
-
 ```
 
 
