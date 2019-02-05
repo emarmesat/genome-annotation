@@ -103,7 +103,7 @@ for i in ${SAMPLES[@]}
 
 
 
-#4: Perform variant calling. Combine all BAMs of interest into the separate per species VCF (these won't include substitutions between species but their variants will be more accurate) or into a combined VCF (to track substitutions).
+#2: Perform variant calling. Combine all BAMs of interest into the separate per species VCF (these won't include substitutions between species but their variants will be more accurate) or into a combined VCF (to track substitutions).
 
 ##B: Whole-genome. 
 ###For both together.
@@ -141,7 +141,7 @@ grep -v '#' c_lp_sm_c_lp_do_c_ll_ki_c_ll_no_c_ll_po_nm.vcf | wc -l #
 
 ```
 
-#5: Polarize contemporary VCFs. Use VCFtools in order to polarize (ancestral vs. derived) the contemporary ll & lp VCFs. The ancestral state was inferred by Maria.
+#3: Polarize contemporary VCFs. Use VCFtools in order to polarize (ancestral vs. derived) the contemporary ll & lp VCFs. The ancestral state was inferred by Maria.
 
 ##Prepare ancestral genome fasta.(This is already done).
 
@@ -234,7 +234,7 @@ grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized.vcf | wc -l #1341848
 
 ```
 
-#6: Set up SnpEff. I'll be following this manual for all SnpEff configuration purposes: http://snpeff.sourceforge.net/SnpEff_manual.html
+#4: Set up SnpEff. I'll be following this manual for all SnpEff configuration purposes: http://snpeff.sourceforge.net/SnpEff_manual.html
 ##Search for the Lynx pardinus database. 
 Search for the Lynx pardinus assembly database in the program's pre-built database. As of June the 6th, 2017, the Lynx pardinus genome isn't included in the snpEff database. A second option would be building our own Lynx pardinus database.
 ##This was already done by Dani, as he will be running this chunk there is no need to re run it.
@@ -393,7 +393,7 @@ ctrl + D #terminate the screen
 
 ```
 
-#7: Annotate using SnpEff.
+#5: Annotate using SnpEff.
 ##Create custom annotation bed file
 Dani will run this chunk
 ```{r Annotate using SnpEff, eval=FALSE, engine='bash'}
@@ -430,7 +430,7 @@ grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized.lr_ann.vcf | wc -l #1341848
 ```
 
 
-#8: Filter the annotated VCF. Subset the VCF files in order to keep only good quality biallelic SNP variants.
+#6: Filter the annotated VCF. Subset the VCF files in order to keep only good quality biallelic SNP variants.
 ##For Lynx pardinus.
 Remember to use mu cnv_file to filter and keep only songle copy genes
 Evaluate tjhe possibility to pipe filters and get one VCF directy
@@ -489,7 +489,7 @@ grep -v '#' c_lp_sm_c_lp_do_nm_genes_polarized_filtered5.lr_ann.vcf | wc -l #402
 
 ```
 
-#9: Obtain per population VCFs.
+#7: Obtain per population VCFs.
 ##Split the VCF into per population VCFs. Generate a VCF for each population.
 ###For Lynx pardinus and Lynx lynx.
 
@@ -536,7 +536,7 @@ grep -v '#' c_lp_sm_perpop_nm_genes/c_lp_sm_perpop_nm_genes.lr_ann.vcf | wc -l #
 
 ```
 
-#10: Split the population VCFs into per individual VCFs. Generate a VCF for each individual.
+#8: Split the population VCFs into per individual VCFs. Generate a VCF for each individual.
 ##For Lynx pardinus and Lynx lynx.
 Evaluate wheter I need this chunk
 ```{r Split the population VCFs into per individual VCFs, eval=FALSE, engine='bash'}
@@ -570,7 +570,7 @@ for i in ${POP[@]}
 
 ```
 
-#11: Get annotation statistics.
+#9: Get annotation statistics.
 ##At the individual level.
 ###Heterozygotes and derived/derived homozygotes.
 
